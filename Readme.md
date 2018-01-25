@@ -1,6 +1,6 @@
 # Note
 
-  Cloned from [commander.js](https://github.com/tj/commander.js) so that I can use this great package in browser (by removing node.js dependencies. Also add a bit functionality so that known and unknown parsed options are also collected separately.
+  Cloned and adapted from [commander.js](https://github.com/tj/commander.js) so that the great package can be used in browser (by removing node.js dependencies from index.js and saved as browser.js). Also added a bit functionality so that known and unknown parsed options are also collected separately (in the collectedOptions field). These hacks are not really ready for real use tho.
 
 # Commander.js
 
