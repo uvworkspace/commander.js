@@ -24,7 +24,9 @@
     "index.js",
     "typings/index.d.ts"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "component-emitter": "^1.2.1"
+  },
   "devDependencies": {
     "@types/node": "^7.0.48",
     "eslint": "^3.19.0",

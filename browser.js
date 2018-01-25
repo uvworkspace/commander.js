@@ -2,24 +2,19 @@
  * Module dependencies.
  */
 
-var EventEmitter = require('events').EventEmitter;
-var spawn = require('child_process').spawn;
-var path = require('path');
-var dirname = path.dirname;
-var basename = path.basename;
-var fs = require('fs');
+var Emitter = require('component-emitter');
 
 /**
- * Inherit `Command` from `EventEmitter.prototype`.
+ * Inherit `Command` from `Emitter`.
  */
 
-require('util').inherits(Command, EventEmitter);
+Emitter(Command.prototype);
 
 /**
- * Expose the root command.
+ * Expose the Command class.
  */
 
-exports = module.exports = new Command();
+exports = module.exports = Command;
 
 /**
  * Expose `Command`.
@@ -96,7 +91,7 @@ Option.prototype.is = function(arg) {
  * @api public
  */
 
-function Command(name) {
+function Command(name, opts) {
   this.commands = [];
   this.options = [];
   this._execs = {};
@@ -104,6 +99,7 @@ function Command(name) {
   this._args = [];
   this._name = name || '';
   this.collectedOptions = {};
+  this._config = opts || {};
 }
 
 /**
@@ -285,8 +281,9 @@ Command.prototype.action = function(fn) {
     // If there are still any unknown options, then we simply
     // die, unless someone asked for help, in which case we give it
     // to them, and then we die.
-    if (parsed.unknown.length > 0) {
-      self.unknownOption(parsed.unknown[0]);
+    unknown = parsed.unknown.filter(nonHelpFlag);
+    if (unknown.length > 0) {
+      self.unknownOption(unknown[0]);
     }
 
     // Leftover arguments need to be pushed back. Fixes issue #56
@@ -321,6 +318,10 @@ Command.prototype.action = function(fn) {
   if (this._alias) parent.on('command:' + this._alias, listener);
   return this;
 };
+
+function nonHelpFlag(flag) {
+  return flag && flag !== '-h' && flag !== '--help';
+}
 
 /**
  * Define option with `flags`, `description` and optional
@@ -459,134 +460,15 @@ Command.prototype.parse = function(argv) {
   // store raw args
   this.rawArgs = argv;
 
-  // guess name
-  this._name = this._name || basename(argv[1], '.js');
-
-  // github-style sub-commands with no sub-command
-  if (this.executables && argv.length < 3 && !this.defaultExecutable) {
-    // this user needs help
-    argv.push('--help');
-  }
-
   // process argv
-  var parsed = this.parseOptions(this.normalize(argv.slice(2)));
+  var parsed = this.parseOptions(this.normalize(argv));
   var args = this.args = parsed.args;
 
   var result = this.parseArgs(this.args, parsed.unknown);
 
-  // executable sub-commands
-  var name = result.args[0];
-
-  var aliasCommand = null;
-  // check alias of sub commands
-  if (name) {
-    aliasCommand = this.commands.filter(function(command) {
-      return command.alias() === name;
-    })[0];
-  }
-
-  if (this._execs[name] && typeof this._execs[name] !== 'function') {
-    return this.executeSubCommand(argv, args, parsed.unknown);
-  } else if (aliasCommand) {
-    // is alias of a subCommand
-    args[0] = aliasCommand._name;
-    return this.executeSubCommand(argv, args, parsed.unknown);
-  } else if (this.defaultExecutable) {
-    // use the default subcommand
-    args.unshift(this.defaultExecutable);
-    return this.executeSubCommand(argv, args, parsed.unknown);
-  }
+  console.log("RES", result);
 
   return result;
-};
-
-/**
- * Execute a sub-command executable.
- *
- * @param {Array} argv
- * @param {Array} args
- * @param {Array} unknown
- * @api private
- */
-
-Command.prototype.executeSubCommand = function(argv, args, unknown) {
-  args = args.concat(unknown);
-
-  if (!args.length) this.help();
-  if (args[0] === 'help' && args.length === 1) this.help();
-
-  // <cmd> --help
-  if (args[0] === 'help') {
-    args[0] = args[1];
-    args[1] = '--help';
-  }
-
-  // executable
-  var f = argv[1];
-  // name of the subcommand, link `pm-install`
-  var bin = basename(f, '.js') + '-' + args[0];
-
-  // In case of globally installed, get the base dir where executable
-  //  subcommand file should be located at
-  var baseDir,
-    link = fs.lstatSync(f).isSymbolicLink() ? fs.readlinkSync(f) : f;
-
-  // when symbolink is relative path
-  if (link !== f && link.charAt(0) !== '/') {
-    link = path.join(dirname(f), link);
-  }
-  baseDir = dirname(link);
-
-  // prefer local `./<bin>` to bin in the $PATH
-  var localBin = path.join(baseDir, bin);
-
-  // whether bin file is a js script with explicit `.js` extension
-  var isExplicitJS = false;
-  if (exists(localBin + '.js')) {
-    bin = localBin + '.js';
-    isExplicitJS = true;
-  } else if (exists(localBin)) {
-    bin = localBin;
-  }
-
-  args = args.slice(1);
-
-  var proc;
-  if (process.platform !== 'win32') {
-    if (isExplicitJS) {
-      args.unshift(bin);
-      // add executable arguments to spawn
-      args = (process.execArgv || []).concat(args);
-
-      proc = spawn(process.argv[0], args, { stdio: 'inherit', customFds: [0, 1, 2] });
-    } else {
-      proc = spawn(bin, args, { stdio: 'inherit', customFds: [0, 1, 2] });
-    }
-  } else {
-    args.unshift(bin);
-    proc = spawn(process.execPath, args, { stdio: 'inherit' });
-  }
-
-  var signals = ['SIGUSR1', 'SIGUSR2', 'SIGTERM', 'SIGINT', 'SIGHUP'];
-  signals.forEach(function(signal) {
-    process.on(signal, function() {
-      if (proc.killed === false && proc.exitCode === null) {
-        proc.kill(signal);
-      }
-    });
-  });
-  proc.on('close', process.exit.bind(process));
-  proc.on('error', function(err) {
-    if (err.code === 'ENOENT') {
-      console.error('\n  %s(1) does not exist, try --help\n', bin);
-    } else if (err.code === 'EACCES') {
-      console.error('\n  %s(1) not executable. try chmod or run with root\n', bin);
-    }
-    process.exit(1);
-  });
-
-  // Store the reference to the child process
-  this.runningCommand = proc;
 };
 
 /**
@@ -658,6 +540,7 @@ Command.prototype.parseArgs = function(args, unknown) {
 
     // If there were no args and we have unknown options,
     // then they are extraneous and we need to error.
+    unknown = unknown.filter(nonHelpFlag);
     if (unknown.length > 0) {
       this.unknownOption(unknown[0]);
     }
@@ -746,7 +629,7 @@ Command.prototype.parseOptions = function(argv) {
     if (arg.length > 1 && arg[0] === '-') {
       unknownOptions.push(arg);
 
-      argName = arg.slice(arg[1] === '-' ? 2 : 1);
+      argName = arg.slice(arg[1] === '-' ? 2 : 1); 
       // If the next argument looks like it might be
       // an argument for this option, we pass it on.
       // If it isn't, then it'll simply be ignored
@@ -791,10 +674,10 @@ Command.prototype.opts = function() {
  */
 
 Command.prototype.missingArgument = function(name) {
-  console.error();
-  console.error("  error: missing required argument `%s'", name);
-  console.error();
-  process.exit(1);
+  this.consoleError();
+  this.consoleError("  error: missing required argument " + name);
+  this.consoleError();
+  //process.exit(1);
 };
 
 /**
@@ -806,14 +689,15 @@ Command.prototype.missingArgument = function(name) {
  */
 
 Command.prototype.optionMissingArgument = function(option, flag) {
-  console.error();
+  this.consoleError();
   if (flag) {
-    console.error("  error: option `%s' argument missing, got `%s'", option.flags, flag);
+    this.consoleError("  error: option " + option.flags +
+      " argument missing, got " + flag);
   } else {
-    console.error("  error: option `%s' argument missing", option.flags);
+    this.consoleError("  error: option " + option.flags + " argument missing");
   }
-  console.error();
-  process.exit(1);
+  this.consoleError();
+  //process.exit(1);
 };
 
 /**
@@ -825,10 +709,10 @@ Command.prototype.optionMissingArgument = function(option, flag) {
 
 Command.prototype.unknownOption = function(flag) {
   if (this._allowUnknownOption) return;
-  console.error();
-  console.error("  error: unknown option `%s'", flag);
-  console.error();
-  process.exit(1);
+  this.consoleError();
+  this.consoleError("  error: unknown option " + flag);
+  this.consoleError();
+  //process.exit(1);
 };
 
 /**
@@ -839,10 +723,10 @@ Command.prototype.unknownOption = function(flag) {
  */
 
 Command.prototype.variadicArgNotLast = function(name) {
-  console.error();
-  console.error("  error: variadic arguments must be last `%s'", name);
-  console.error();
-  process.exit(1);
+  this.consoleError();
+  this.consoleError("  error: variadic arguments must be last " + name);
+  this.consoleError();
+  //process.exit(1);
 };
 
 /**
@@ -863,9 +747,8 @@ Command.prototype.version = function(str, flags) {
   flags = flags || '-V, --version';
   this.option(flags, 'output the version number');
   this.on('option:version', function() {
-    process.stdout.write(str + '\n');
-    process.exit(0);
-  });
+    this.stdoutWrite('\n' + str);
+  }.bind(this));
   return this;
 };
 
@@ -1072,8 +955,8 @@ Command.prototype.outputHelp = function(cb) {
       return passthru;
     };
   }
-  process.stdout.write(cb(this.helpInformation()));
-  this.emit('--help');
+  this.stdoutWrite(cb(this.helpInformation()));
+  //this.emit('--help');
 };
 
 /**
@@ -1084,7 +967,27 @@ Command.prototype.outputHelp = function(cb) {
 
 Command.prototype.help = function(cb) {
   this.outputHelp(cb);
-  process.exit();
+};
+
+Command.prototype.stdoutWrite = function (s) {
+  var writeln = this._config.writeln;
+  if (writeln) {
+    if (s && typeof s === 'string') {
+      s.split('\n').forEach(writeln);
+    } else {
+      writeln(s || '');
+    }
+  } else {
+    console.log(s);
+  }
+};
+
+Command.prototype.consoleError = function (s) {
+  if (this._config.writeln) {
+    this.stdoutWrite(s);
+  } else {
+    console.error(s);
+  }
 };
 
 /**
@@ -1128,7 +1031,7 @@ function outputHelpIfNecessary(cmd, options) {
   for (var i = 0; i < options.length; i++) {
     if (options[i] === '--help' || options[i] === '-h') {
       cmd.outputHelp();
-      process.exit(0);
+      return;
     }
   }
 }
