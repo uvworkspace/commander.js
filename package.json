@@ -1,6 +1,6 @@
 {
   "name": "uvw-commander",
-  "version": "2.13.0",
+  "version": "2.15.1",
   "description": "the complete solution for node.js command-line programs (forked from tj/commander.js https://github.com/tj/commander.js to make it usable in browser)",
   "keywords": [
     "commander",
@@ -28,12 +28,12 @@
     "component-emitter": "^1.2.1"
   },
   "devDependencies": {
-    "@types/node": "^7.0.48",
+    "@types/node": "^7.0.55",
     "eslint": "^3.19.0",
     "should": "^11.2.1",
     "sinon": "^2.4.1",
     "standard": "^10.0.3",
-    "typescript": "^2.6.2"
+    "typescript": "^2.7.2"
   },
   "typings": "typings/index.d.ts"
 }

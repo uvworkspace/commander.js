@@ -103,7 +103,6 @@ function Command(name) {
   this._allowUnknownOption = false;
   this._args = [];
   this._name = name || '';
-  this.collectedOptions = {};
 }
 
 /**
@@ -398,7 +397,6 @@ Command.prototype.option = function(flags, description, fn, defaultValue) {
     // preassign only if we have a default
     if (defaultValue !== undefined) {
       self[name] = defaultValue;
-      self.collectedOptions[name] = self[name];
       option.defaultValue = defaultValue;
     }
   }
@@ -421,15 +419,12 @@ Command.prototype.option = function(flags, description, fn, defaultValue) {
         self[name] = option.bool
           ? defaultValue || true
           : false;
-        self.collectedOptions[name] = self[name];
       } else {
         self[name] = val;
-        self.collectedOptions[name] = self[name];
       }
     } else if (val !== null) {
       // reassign
       self[name] = val;
-      self.collectedOptions[name] = self[name]; 
     }
   });
 
@@ -700,8 +695,7 @@ Command.prototype.parseOptions = function(argv) {
     len = argv.length,
     literal,
     option,
-    arg,
-    argName;
+    arg;
 
   var unknownOptions = [];
 
@@ -750,15 +744,11 @@ Command.prototype.parseOptions = function(argv) {
     if (arg.length > 1 && arg[0] === '-') {
       unknownOptions.push(arg);
 
-      argName = arg.slice(arg[1] === '-' ? 2 : 1);
       // If the next argument looks like it might be
       // an argument for this option, we pass it on.
       // If it isn't, then it'll simply be ignored
       if ((i + 1) < argv.length && argv[i + 1][0] !== '-') {
         unknownOptions.push(argv[++i]);
-        this.collectedOptions[argName] = argv[i];
-      } else {
-        this.collectedOptions[argName] = true;
       }
       continue;
     }

@@ -1,0 +1,21 @@
+105a106
+>   this.collectedOptions = {};
+399a401
+>       self.collectedOptions[name] = self[name];
+421a424
+>         self.collectedOptions[name] = self[name];
+423a427
+>         self.collectedOptions[name] = self[name];
+427a432
+>       self.collectedOptions[name] = self[name]; 
+698c703,704
+<     arg;
+---
+>     arg,
+>     argName;
+746a753
+>       argName = arg.slice(arg[1] === '-' ? 2 : 1);
+751a759,761
+>         this.collectedOptions[argName] = argv[i];
+>       } else {
+>         this.collectedOptions[argName] = true;

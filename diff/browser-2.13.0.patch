@@ -1,0 +1,293 @@
+5,10c5
+< var EventEmitter = require('events').EventEmitter;
+< var spawn = require('child_process').spawn;
+< var path = require('path');
+< var dirname = path.dirname;
+< var basename = path.basename;
+< var fs = require('fs');
+---
+> var Emitter = require('component-emitter');
+13c8
+<  * Inherit `Command` from `EventEmitter.prototype`.
+---
+>  * Inherit `Command` from `Emitter`.
+16c11
+< require('util').inherits(Command, EventEmitter);
+---
+> Emitter(Command.prototype);
+19c14
+<  * Expose the root command.
+---
+>  * Expose the Command class.
+22c17
+< exports = module.exports = new Command();
+---
+> exports = module.exports = Command;
+99c94
+< function Command(name) {
+---
+> function Command(name, opts) {
+105a101,102
+>   this.collectedOptions = {};
+>   this._config = opts || {};
+287,288c284,286
+<     if (parsed.unknown.length > 0) {
+<       self.unknownOption(parsed.unknown[0]);
+---
+>     unknown = parsed.unknown.filter(nonHelpFlag);
+>     if (unknown.length > 0) {
+>       self.unknownOption(unknown[0]);
+323a322,325
+> function nonHelpFlag(flag) {
+>   return flag && flag !== '-h' && flag !== '--help';
+> }
+> 
+399c401
+<       self[name] = defaultValue;
+---
+>       self[name] = self.collectedOptions[name] = defaultValue;
+419c421
+<         self[name] = option.bool
+---
+>         self[name] = self.collectedOptions[name] = option.bool
+423c425
+<         self[name] = val;
+---
+>         self[name] = self.collectedOptions[name] = val;
+427c429
+<       self[name] = val;
+---
+>       self[name] = self.collectedOptions[name] = val;
+461,469d462
+<   // guess name
+<   this._name = this._name || basename(argv[1], '.js');
+< 
+<   // github-style sub-commands with no sub-command
+<   if (this.executables && argv.length < 3 && !this.defaultExecutable) {
+<     // this user needs help
+<     argv.push('--help');
+<   }
+< 
+471c464
+<   var parsed = this.parseOptions(this.normalize(argv.slice(2)));
+---
+>   var parsed = this.parseOptions(this.normalize(argv));
+476,497c469
+<   // executable sub-commands
+<   var name = result.args[0];
+< 
+<   var aliasCommand = null;
+<   // check alias of sub commands
+<   if (name) {
+<     aliasCommand = this.commands.filter(function(command) {
+<       return command.alias() === name;
+<     })[0];
+<   }
+< 
+<   if (this._execs[name] && typeof this._execs[name] !== 'function') {
+<     return this.executeSubCommand(argv, args, parsed.unknown);
+<   } else if (aliasCommand) {
+<     // is alias of a subCommand
+<     args[0] = aliasCommand._name;
+<     return this.executeSubCommand(argv, args, parsed.unknown);
+<   } else if (this.defaultExecutable) {
+<     // use the default subcommand
+<     args.unshift(this.defaultExecutable);
+<     return this.executeSubCommand(argv, args, parsed.unknown);
+<   }
+---
+>   console.log("RES", result);
+503,591d474
+<  * Execute a sub-command executable.
+<  *
+<  * @param {Array} argv
+<  * @param {Array} args
+<  * @param {Array} unknown
+<  * @api private
+<  */
+< 
+< Command.prototype.executeSubCommand = function(argv, args, unknown) {
+<   args = args.concat(unknown);
+< 
+<   if (!args.length) this.help();
+<   if (args[0] === 'help' && args.length === 1) this.help();
+< 
+<   // <cmd> --help
+<   if (args[0] === 'help') {
+<     args[0] = args[1];
+<     args[1] = '--help';
+<   }
+< 
+<   // executable
+<   var f = argv[1];
+<   // name of the subcommand, link `pm-install`
+<   var bin = basename(f, '.js') + '-' + args[0];
+< 
+<   // In case of globally installed, get the base dir where executable
+<   //  subcommand file should be located at
+<   var baseDir,
+<     link = fs.lstatSync(f).isSymbolicLink() ? fs.readlinkSync(f) : f;
+< 
+<   // when symbolink is relative path
+<   if (link !== f && link.charAt(0) !== '/') {
+<     link = path.join(dirname(f), link);
+<   }
+<   baseDir = dirname(link);
+< 
+<   // prefer local `./<bin>` to bin in the $PATH
+<   var localBin = path.join(baseDir, bin);
+< 
+<   // whether bin file is a js script with explicit `.js` extension
+<   var isExplicitJS = false;
+<   if (exists(localBin + '.js')) {
+<     bin = localBin + '.js';
+<     isExplicitJS = true;
+<   } else if (exists(localBin)) {
+<     bin = localBin;
+<   }
+< 
+<   args = args.slice(1);
+< 
+<   var proc;
+<   if (process.platform !== 'win32') {
+<     if (isExplicitJS) {
+<       args.unshift(bin);
+<       // add executable arguments to spawn
+<       args = (process.execArgv || []).concat(args);
+< 
+<       proc = spawn(process.argv[0], args, { stdio: 'inherit', customFds: [0, 1, 2] });
+<     } else {
+<       proc = spawn(bin, args, { stdio: 'inherit', customFds: [0, 1, 2] });
+<     }
+<   } else {
+<     args.unshift(bin);
+<     proc = spawn(process.execPath, args, { stdio: 'inherit' });
+<   }
+< 
+<   var signals = ['SIGUSR1', 'SIGUSR2', 'SIGTERM', 'SIGINT', 'SIGHUP'];
+<   signals.forEach(function(signal) {
+<     process.on(signal, function() {
+<       if (proc.killed === false && proc.exitCode === null) {
+<         proc.kill(signal);
+<       }
+<     });
+<   });
+<   proc.on('close', process.exit.bind(process));
+<   proc.on('error', function(err) {
+<     if (err.code === 'ENOENT') {
+<       console.error('\n  %s(1) does not exist, try --help\n', bin);
+<     } else if (err.code === 'EACCES') {
+<       console.error('\n  %s(1) not executable. try chmod or run with root\n', bin);
+<     }
+<     process.exit(1);
+<   });
+< 
+<   // Store the reference to the child process
+<   this.runningCommand = proc;
+< };
+< 
+< /**
+659a543
+>     unknown = unknown.filter(nonHelpFlag);
+698c582,583
+<     arg;
+---
+>     arg,
+>     argName;
+746a632
+>       argName = arg.slice(arg[1] === '-' ? 2 : 1); 
+750a637
+>         this.collectedOptions[argName] = argv[i + 1];
+751a639,640
+>       } else {
+>         this.collectedOptions[argName] = true;
+788,791c677,680
+<   console.error();
+<   console.error("  error: missing required argument `%s'", name);
+<   console.error();
+<   process.exit(1);
+---
+>   this.consoleError();
+>   this.consoleError("  error: missing required argument " + name);
+>   this.consoleError();
+>   //process.exit(1);
+803c692
+<   console.error();
+---
+>   this.consoleError();
+805c694,695
+<     console.error("  error: option `%s' argument missing, got `%s'", option.flags, flag);
+---
+>     this.consoleError("  error: option " + option.flags +
+>       " argument missing, got " + flag);
+807c697
+<     console.error("  error: option `%s' argument missing", option.flags);
+---
+>     this.consoleError("  error: option " + option.flags + " argument missing");
+809,810c699,700
+<   console.error();
+<   process.exit(1);
+---
+>   this.consoleError();
+>   //process.exit(1);
+822,825c712,715
+<   console.error();
+<   console.error("  error: unknown option `%s'", flag);
+<   console.error();
+<   process.exit(1);
+---
+>   this.consoleError();
+>   this.consoleError("  error: unknown option " + flag);
+>   this.consoleError();
+>   //process.exit(1);
+836,839c726,729
+<   console.error();
+<   console.error("  error: variadic arguments must be last `%s'", name);
+<   console.error();
+<   process.exit(1);
+---
+>   this.consoleError();
+>   this.consoleError("  error: variadic arguments must be last " + name);
+>   this.consoleError();
+>   //process.exit(1);
+860,862c750,751
+<     process.stdout.write(str + '\n');
+<     process.exit(0);
+<   });
+---
+>     this.stdoutWrite('\n' + str);
+>   }.bind(this));
+1069,1070c958,959
+<   process.stdout.write(cb(this.helpInformation()));
+<   this.emit('--help');
+---
+>   this.stdoutWrite(cb(this.helpInformation()));
+>   //this.emit('--help');
+1081c970,990
+<   process.exit();
+---
+> };
+> 
+> Command.prototype.stdoutWrite = function (s) {
+>   var writeln = this._config.writeln;
+>   if (writeln) {
+>     if (s && typeof s === 'string') {
+>       s.split('\n').forEach(writeln);
+>     } else {
+>       writeln(s || '');
+>     }
+>   } else {
+>     console.log(s);
+>   }
+> };
+> 
+> Command.prototype.consoleError = function (s) {
+>   if (this._config.writeln) {
+>     this.stdoutWrite(s);
+>   } else {
+>     console.error(s);
+>   }
+1125c1034
+<       process.exit(0);
+---
+>       return;
