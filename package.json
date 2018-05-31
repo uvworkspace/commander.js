@@ -1,6 +1,6 @@
 {
   "name": "uvw-commander",
-  "version": "2.15.1",
+  "version": "2.15.2",
   "description": "the complete solution for node.js command-line programs (forked from tj/commander.js https://github.com/tj/commander.js to make it usable in browser)",
   "keywords": [
     "commander",
@@ -8,7 +8,7 @@
     "option",
     "parser"
   ],
-  "author": "uvworkspace <uvw@uvw.mytraces.net>",
+  "author": "uvworkspace <uvw@mytraces.net>",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,6 +21,7 @@
   },
   "main": "index",
   "files": [
+    "browser.js",
     "index.js",
     "typings/index.d.ts"
   ],

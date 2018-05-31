@@ -465,9 +465,6 @@ Command.prototype.parse = function(argv) {
   var args = this.args = parsed.args;
 
   var result = this.parseArgs(this.args, parsed.unknown);
-
-  console.log("RES", result);
-
   return result;
 };
 
